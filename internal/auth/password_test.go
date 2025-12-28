@@ -1,12 +1,12 @@
 package auth
 
 import (
-	"fmt"
+	"log"
 	"testing"
 )
 
 func TestHashPassword(t *testing.T) {
-
+	log.Println("TestHashPassowrd")
 	cases := []string{
 		"lowercase",
 		"UPPERCASE",
@@ -19,7 +19,7 @@ func TestHashPassword(t *testing.T) {
 	for _, Case := range cases {
 		passToHash := Case
 		hashedPass, err := HashPassword(passToHash)
-		fmt.Printf("Password: %s ; Hash: %s", passToHash, hashedPass)
+		//fmt.Printf("Password: %s ; Hash: %s\n", passToHash, hashedPass)
 		if err != nil {
 			t.Errorf("Was not expecting any errors")
 		}
