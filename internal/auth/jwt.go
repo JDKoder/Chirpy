@@ -55,7 +55,10 @@ func GetBearerToken(headers http.Header) (string, error) {
 		return "", fmt.Errorf("Authorization header not set")
 	}
 	authSplice := strings.Split(authHeader, " ")
+	fmt.Printf("authSplice: %s\n", authSplice[0])
+	fmt.Printf("length: %d\n", len(authSplice))
 	if len(authSplice) < 2 {
+		fmt.Println("Foo")
 		return "", fmt.Errorf("Bad Authorization Header %s", authHeader)
 	}
 	return authSplice[1], nil

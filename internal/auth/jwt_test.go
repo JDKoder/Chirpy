@@ -2,6 +2,7 @@ package auth
 
 import (
 	"log"
+	"net/http"
 	"testing"
 	"time"
 
@@ -45,4 +46,56 @@ func TestMakeJWT(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestGetBearerToken(t *testing.T) {
+	log.Println("TestGetBearerToken")
+
+	type GBTCase struct {
+		hasAuthHeader bool
+		authHeader    string
+		expected      string
+	}
+
+	cases := []GBTCase{
+		{
+			hasAuthHeader: true,
+			authHeader:    "Bearer abcdefghijklmnopqrstuvwxyz.abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz.abcdefghijklmnopqrstuvwxyz",
+			expected:      "abcdefghijklmnopqrstuvwxyz.abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz.abcdefghijklmnopqrstuvwxyz",
+		},
+		{
+			hasAuthHeader: false,
+			authHeader:    "",
+			expected:      "",
+		},
+		{
+			hasAuthHeader: true,
+			authHeader:    "Somethingthatisnotauthorization",
+			expected:      "",
+		},
+	}
+
+	headers := http.Header{}
+	token := ""
+	var err error
+
+	for _, Case := range cases {
+		token = ""
+		err = nil
+		if Case.hasAuthHeader {
+			headers.Set("Authorization", Case.authHeader)
+		} else {
+			headers.Del("Authorization")
+		}
+		token, err = GetBearerToken(headers)
+		if err != nil {
+			if Case.expected != "" {
+				t.Errorf("Unexpected Error for authHeader [%s]", Case.authHeader)
+			}
+		}
+		if token != Case.expected {
+			t.Errorf("token %s was not expected %s", token, Case.expected)
+		}
+	}
+
 }
