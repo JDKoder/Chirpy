@@ -3,6 +3,8 @@ package auth
 import (
 	"fmt"
 	"log"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -33,7 +35,6 @@ func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
 	})
 	var userID uuid.UUID
 	if err != nil {
-		log.Fatal(err)
 		return uuid.Nil, err
 	} else if claims, ok := token.Claims.(*CustomClaim); ok {
 		Subject, _ := claims.GetSubject()
@@ -46,4 +47,16 @@ func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
 		return uuid.UUID{}, fmt.Errorf("unknown claims")
 	}
 	return userID, nil
+}
+
+func GetBearerToken(headers http.Header) (string, error) {
+	authHeader := headers.Get("Authorization")
+	if authHeader == "" {
+		return "", fmt.Errorf("Authorization header not set")
+	}
+	authSplice := strings.Split(authHeader, " ")
+	if len(authSplice) < 2 {
+		return "", fmt.Errorf("Bad Authorization Header %s", authHeader)
+	}
+	return authSplice[1], nil
 }
