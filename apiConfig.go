@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/JDKoder/Chirpy/internal/auth"
 	"github.com/JDKoder/Chirpy/internal/database"
@@ -15,9 +16,23 @@ import (
 )
 
 type apiConfig struct {
-	fileserverHits atomic.Int32
-	dbQueries      *database.Queries
-	platform       string
+	fileserverHits  atomic.Int32
+	dbQueries       *database.Queries
+	platform        string
+	secretToken     string
+	tokenDuration   string
+	refreshDuration string
+}
+
+type emailBody struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type userDTO struct {
+	database.User
+	Token        string `json:"token"`
+	RefreshToken string `json:"refresh_token"`
 }
 
 func (config *apiConfig) incrementFileserverHits(next http.Handler) http.Handler {
@@ -72,11 +87,6 @@ func (config *apiConfig) getChirp(w http.ResponseWriter, req *http.Request) {
 	w.Write(dat)
 }
 
-type emailBody struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
 func (config *apiConfig) createUser(w http.ResponseWriter, req *http.Request) {
 	reqEmail := emailBody{}
 	decoder := json.NewDecoder(req.Body)
@@ -116,13 +126,29 @@ func (config *apiConfig) userLogin(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(500)
 		return
 	}
+	//TODO: Handle scenario where user's email is not found
 	user, _ := config.dbQueries.GetUser(req.Context(), login.Email)
 	if good, _ := auth.CheckPasswordHash(login.Password, user.HashedPassword); !good {
+		log.Printf("Login failed for e-mail: %s\n", login.Email)
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 	user.HashedPassword = ""
-	dat, err := json.Marshal(user)
+	tokenExpiration, err := time.ParseDuration(config.tokenDuration)
+	if err != nil {
+		log.Printf("unable to parse the duration set in the environment %s", config.tokenDuration)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	jwt, err := auth.MakeJWT(user.ID, config.secretToken, tokenExpiration)
+	RefreshToken, _ := auth.MakeRefreshToken()
+	//TODO: Add RefreshToken record to database
+	dto := userDTO{
+		database.User{ID: user.ID, CreatedAt: user.CreatedAt, UpdatedAt: user.UpdatedAt, Email: user.Email},
+		jwt,
+		RefreshToken,
+	}
+	dat, err := json.Marshal(dto)
 	if err != nil {
 		log.Printf("error marshalling error: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -170,10 +196,22 @@ func (config *apiConfig) chirp(w http.ResponseWriter, req *http.Request) {
 		//IsValid bool `json:"valid"`
 		CleanedBody string `json:"cleaned_body"`
 	}
+	reqjwt, err := auth.GetBearerToken(req.Header)
+	if err != nil {
+		log.Printf("Token is malformed: %s", err)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	ID, err := auth.ValidateJWT(reqjwt, config.secretToken)
+	if err != nil {
+		log.Printf("JWT is invalid: %s", err)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
 	validating := chirpBody{}
 	decoder := json.NewDecoder(req.Body)
-	err := decoder.Decode(&validating)
-	log.Printf("userid: %s, body %s", validating.UserID, validating.Body)
+	err = decoder.Decode(&validating)
+	log.Printf("userid: %s, body %s", ID, validating.Body)
 	if err != nil {
 		errorResponse := chirpError{Error: fmt.Sprintf("Error Decoding response %s", err)}
 		w.WriteHeader(http.StatusInternalServerError)
@@ -199,7 +237,7 @@ func (config *apiConfig) chirp(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	cleanLanguage(&validating.Body)
-	qresp, err := config.dbQueries.AddChirp(req.Context(), database.AddChirpParams{Body: validating.Body, UserID: validating.UserID})
+	qresp, err := config.dbQueries.AddChirp(req.Context(), database.AddChirpParams{Body: validating.Body, UserID: ID})
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Printf("AddChirp failed with error: %s", err)

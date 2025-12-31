@@ -35,6 +35,8 @@ func main() {
 
 	cfg.dbQueries = dbQueries
 	cfg.platform = os.Getenv("PLATFORM")
+	cfg.secretToken = os.Getenv("INTERNAL_SECRET")
+	cfg.tokenDuration = os.Getenv("DEFAULT_TOKEN_DURATION")
 
 	s := &http.Server{
 		Addr:           ":8080",

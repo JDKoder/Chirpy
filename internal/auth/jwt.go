@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"net/http"
@@ -40,7 +42,7 @@ func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
 		Subject, _ := claims.GetSubject()
 		userID, err = uuid.Parse(Subject)
 		if err != nil {
-			return userID, fmt.Errorf("Couldn't parse claims.Subject: %s", claims.Subject)
+			return userID, fmt.Errorf("Couldn't parse claims.Subject: %s\n", claims.Subject)
 		}
 	} else {
 		log.Fatal("unknown claims type, cannot proceed")
@@ -52,14 +54,18 @@ func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
 func GetBearerToken(headers http.Header) (string, error) {
 	authHeader := headers.Get("Authorization")
 	if authHeader == "" {
-		return "", fmt.Errorf("Authorization header not set")
+		return "", fmt.Errorf("Authorization header not set\n")
 	}
 	authSplice := strings.Split(authHeader, " ")
-	fmt.Printf("authSplice: %s\n", authSplice[0])
-	fmt.Printf("length: %d\n", len(authSplice))
 	if len(authSplice) < 2 {
-		fmt.Println("Foo")
-		return "", fmt.Errorf("Bad Authorization Header %s", authHeader)
+		return "", fmt.Errorf("Bad Authorization Header %s\n", authHeader)
 	}
 	return authSplice[1], nil
+}
+
+func MakeRefreshToken() (string, error) {
+	RandomBytes := make([]byte, 32)
+	rand.Read(RandomBytes)
+	hex.EncodeToString(RandomBytes)
+
 }
