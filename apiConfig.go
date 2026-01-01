@@ -88,6 +88,10 @@ func (config *apiConfig) getChirp(w http.ResponseWriter, req *http.Request) {
 }
 
 func (config *apiConfig) updateUser(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPut {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
 	reqEmail := emailBody{}
 	decoder := json.NewDecoder(req.Body)
 	err := decoder.Decode(&reqEmail)
