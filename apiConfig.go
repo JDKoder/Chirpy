@@ -87,6 +87,33 @@ func (config *apiConfig) getChirp(w http.ResponseWriter, req *http.Request) {
 	w.Write(dat)
 }
 
+func (config *apiConfig) updateUser(w http.ResponseWriter, req *http.Request) {
+	reqEmail := emailBody{}
+	decoder := json.NewDecoder(req.Body)
+	err := decoder.Decode(&reqEmail)
+	if err != nil {
+		log.Printf("Couldn't decode json body to emailBody: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+
+	hashedPass, err := auth.HashPassword(reqEmail.Password)
+
+	accessToken, err := auth.GetBearerToken(req.Header)
+	userID, err := auth.ValidateJWT(accessToken, config.secretToken)
+	if err != nil {
+		log.Printf("updateUser: bad access token")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	user, err := config.dbQueries.UpdateUser(req.Context(), database.UpdateUserParams{Email: reqEmail.Email, HashedPassword: hashedPass, ID: userID})
+	if err != nil {
+		log.Printf("updateUser: unable to retrieve user by id %s\n", userID.String())
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+
+}
+
 func (config *apiConfig) createUser(w http.ResponseWriter, req *http.Request) {
 	reqEmail := emailBody{}
 	decoder := json.NewDecoder(req.Body)
@@ -117,6 +144,86 @@ func (config *apiConfig) createUser(w http.ResponseWriter, req *http.Request) {
 	w.Write(dat)
 }
 
+func (config *apiConfig) revoke(w http.ResponseWriter, req *http.Request) {
+	refreshToken, err := auth.GetBearerToken(req.Header)
+	if err != nil {
+		log.Printf("Token is malformed: %s", err)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	err = config.dbQueries.RevokeToken(req.Context(), refreshToken)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (config *apiConfig) refresh(w http.ResponseWriter, req *http.Request) {
+
+	type refreshTokenResponse struct {
+		Token string `json:"token"`
+	}
+
+	refreshToken, err := auth.GetBearerToken(req.Header)
+	if err != nil {
+		log.Printf("Token is malformed: %s", err)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	ExistingRefreshToken, err := config.dbQueries.GetRefreshToken(req.Context(), refreshToken)
+	if err != nil {
+		log.Printf("No existing token found for given auth.\n")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	if time.Now().After(ExistingRefreshToken.ExpiresAt) {
+		log.Printf("Token expired")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	if ExistingRefreshToken.RevokedAt.Valid {
+		log.Printf("Token revoked")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	//TODO: With the user's ID, generate new access token
+	AuthToken, err := auth.MakeJWT(ExistingRefreshToken.UserID, config.secretToken, getTokenDuration(config.tokenDuration))
+	if err != nil {
+		log.Printf("refreshing with new jwt failed.\n")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	dto := refreshTokenResponse{
+		Token: AuthToken,
+	}
+	dat, err := json.Marshal(dto)
+	if err != nil {
+		log.Printf("error marshalling error: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	log.Printf("refresh generated a new token with dto %s", dat)
+	w.WriteHeader(http.StatusOK)
+	w.Write(dat)
+}
+
+/**
+* Utility function to reduce boilerplate error checking for parsing failures.
+* Will cause panic if the input string cannot be parsed.  Should only be used
+* with environment set known parsable values, or unit tests.
+* @RefactorCandidate
+**/
+func getTokenDuration(durationStr string) time.Duration {
+	TokenDuration, err := time.ParseDuration(durationStr)
+	if err != nil {
+		log.Fatalf("unable to parse the duration set in the environment %s\n", durationStr)
+		panic("environment token duration is unparsable")
+	}
+	return TokenDuration
+}
+
 func (config *apiConfig) userLogin(w http.ResponseWriter, req *http.Request) {
 	login := emailBody{}
 	decoder := json.NewDecoder(req.Body)
@@ -134,19 +241,29 @@ func (config *apiConfig) userLogin(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	user.HashedPassword = ""
-	tokenExpiration, err := time.ParseDuration(config.tokenDuration)
+	jwt, err := auth.MakeJWT(user.ID, config.secretToken, getTokenDuration(config.tokenDuration))
+	RefreshToken, _ := auth.MakeRefreshToken()
+	RefreshDuration := getTokenDuration(config.refreshDuration)
+	RefreshExpiration := time.Now().Add(RefreshDuration)
+	//TODO: Add RefreshToken record to database
+	CreateRefreshTokenParams := database.CreateRefreshTokenParams{
+		Token:     RefreshToken,
+		UserID:    user.ID,
+		ExpiresAt: RefreshExpiration,
+	}
+	DBRefreshToken, err := config.dbQueries.CreateRefreshToken(
+		req.Context(),
+		CreateRefreshTokenParams,
+	)
 	if err != nil {
-		log.Printf("unable to parse the duration set in the environment %s", config.tokenDuration)
+		log.Printf("Unable to generate a refresh token for the user. token: %s, userid: %s, expiresat: %s", RefreshToken, user.ID.String(), RefreshExpiration.String())
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	jwt, err := auth.MakeJWT(user.ID, config.secretToken, tokenExpiration)
-	RefreshToken, _ := auth.MakeRefreshToken()
-	//TODO: Add RefreshToken record to database
 	dto := userDTO{
 		database.User{ID: user.ID, CreatedAt: user.CreatedAt, UpdatedAt: user.UpdatedAt, Email: user.Email},
 		jwt,
-		RefreshToken,
+		DBRefreshToken.Token,
 	}
 	dat, err := json.Marshal(dto)
 	if err != nil {

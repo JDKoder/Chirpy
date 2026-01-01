@@ -37,6 +37,7 @@ func main() {
 	cfg.platform = os.Getenv("PLATFORM")
 	cfg.secretToken = os.Getenv("INTERNAL_SECRET")
 	cfg.tokenDuration = os.Getenv("DEFAULT_TOKEN_DURATION")
+	cfg.refreshDuration = os.Getenv("REFRESH_TOKEN_DURATION")
 
 	s := &http.Server{
 		Addr:           ":8080",
@@ -54,6 +55,8 @@ func main() {
 	const API_VALIDATE_CHIRP = API_PREFIX + "/validate_chirp"
 	const API_USERS = API_PREFIX + "/users"
 	const API_LOGIN = API_PREFIX + "/login"
+	const API_REFRESH = API_PREFIX + "/refresh"
+	const API_REVOKE = API_PREFIX + "/revoke"
 	const API_CHIRPS = API_PREFIX + "/chirps"
 	const API_CHIRPS_BY_ID = API_CHIRPS + "/{chirpId}"
 	fs := http.FileServer(http.Dir("."))
@@ -66,6 +69,8 @@ func main() {
 	serverMux.HandleFunc("POST "+API_CHIRPS, cfg.chirp)
 	serverMux.HandleFunc("GET "+API_CHIRPS, cfg.getChirp)
 	serverMux.HandleFunc("GET "+API_CHIRPS_BY_ID, cfg.getChirpById)
+	serverMux.HandleFunc("POST "+API_REFRESH, cfg.refresh)
+	serverMux.HandleFunc("POST "+API_REVOKE, cfg.revoke)
 	s.ListenAndServe()
 }
 
