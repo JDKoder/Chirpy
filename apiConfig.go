@@ -43,6 +43,45 @@ func (config *apiConfig) incrementFileserverHits(next http.Handler) http.Handler
 	})
 }
 
+func (config *apiConfig) deleteChirpByID(w http.ResponseWriter, req *http.Request) {
+
+	accessToken, err := auth.GetBearerToken(req.Header)
+	userID, err := auth.ValidateJWT(accessToken, config.secretToken)
+	if err != nil {
+		log.Printf("updateUser: bad access token")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	chirpId := req.PathValue("chirpId")
+	chirpUUID, err := uuid.Parse(chirpId)
+	if err != nil {
+		log.Printf("Couldn't parse uuid from chirpid %s", chirpId)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	chirp, err := config.dbQueries.GetChirp(req.Context(), chirpUUID)
+	if err != nil {
+		if strings.Contains(fmt.Sprintf("%s", err), "sql: no rows in result set") {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		log.Printf("GetChirp failed with error: %s", err)
+		return
+	}
+	if chirp.UserID != userID {
+		log.Printf("Unauthorized deletion of another user's chirp\n")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	err = config.dbQueries.DeleteChirp(req.Context(), chirpUUID)
+	if err != nil {
+		log.Printf("DeleteChirp failed")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (config *apiConfig) getChirpById(w http.ResponseWriter, req *http.Request) {
 	chirpId := req.PathValue("chirpId")
 	chirpUUID, err := uuid.Parse(chirpId)

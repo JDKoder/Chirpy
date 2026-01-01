@@ -70,6 +70,7 @@ func main() {
 	serverMux.HandleFunc("POST "+API_CHIRPS, cfg.chirp)
 	serverMux.HandleFunc("GET "+API_CHIRPS, cfg.getChirp)
 	serverMux.HandleFunc("GET "+API_CHIRPS_BY_ID, cfg.getChirpById)
+	serverMux.HandleFunc("DELETE "+API_CHIRPS_BY_ID, cfg.deleteChirpByID)
 	serverMux.HandleFunc("POST "+API_REFRESH, cfg.refresh)
 	serverMux.HandleFunc("POST "+API_REVOKE, cfg.revoke)
 	s.ListenAndServe()
