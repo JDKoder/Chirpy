@@ -65,6 +65,7 @@ func main() {
 	serverMux.HandleFunc("GET "+API_METRICS, cfg.fileserverMetricsHandler)
 	serverMux.HandleFunc("POST "+API_RESET, cfg.resetAll)
 	serverMux.HandleFunc("POST "+API_USERS, cfg.createUser)
+	serverMux.HandleFunc("PUT "+API_USERS, cfg.updateUser)
 	serverMux.HandleFunc("POST "+API_LOGIN, cfg.userLogin)
 	serverMux.HandleFunc("POST "+API_CHIRPS, cfg.chirp)
 	serverMux.HandleFunc("GET "+API_CHIRPS, cfg.getChirp)

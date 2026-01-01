@@ -96,9 +96,7 @@ func (config *apiConfig) updateUser(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(500)
 		return
 	}
-
 	hashedPass, err := auth.HashPassword(reqEmail.Password)
-
 	accessToken, err := auth.GetBearerToken(req.Header)
 	userID, err := auth.ValidateJWT(accessToken, config.secretToken)
 	if err != nil {
@@ -108,10 +106,23 @@ func (config *apiConfig) updateUser(w http.ResponseWriter, req *http.Request) {
 	}
 	user, err := config.dbQueries.UpdateUser(req.Context(), database.UpdateUserParams{Email: reqEmail.Email, HashedPassword: hashedPass, ID: userID})
 	if err != nil {
-		log.Printf("updateUser: unable to retrieve user by id %s\n", userID.String())
+		log.Printf("updateUser: unable to updateUser %s\n", userID.String())
 		w.WriteHeader(http.StatusInternalServerError)
 	}
+	log.Println("marshalling")
+	marshalUserDTO(user, w, http.StatusOK)
+}
 
+func marshalUserDTO(user database.User, w http.ResponseWriter, successStatus int) {
+	user.HashedPassword = ""
+	dat, err := json.Marshal(user)
+	if err != nil {
+		log.Printf("error marshalling error: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(successStatus)
+	w.Write(dat)
 }
 
 func (config *apiConfig) createUser(w http.ResponseWriter, req *http.Request) {
@@ -133,15 +144,7 @@ func (config *apiConfig) createUser(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	user.HashedPassword = ""
-	dat, err := json.Marshal(user)
-	if err != nil {
-		log.Printf("error marshalling error: %s", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusCreated)
-	w.Write(dat)
+	marshalUserDTO(user, w, http.StatusCreated)
 }
 
 func (config *apiConfig) revoke(w http.ResponseWriter, req *http.Request) {
