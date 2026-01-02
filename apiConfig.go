@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -41,8 +40,8 @@ type polkaEventData struct {
 }
 
 type polkaEvent struct {
-	Event string                 `json:"event"`
-	Data   polkaEventData `json:"data"`
+	Event string         `json:"event"`
+	Data  polkaEventData `json:"data"`
 }
 
 func (config *apiConfig) handlePolkaWebookEvent(w http.ResponseWriter, req *http.Request) {
@@ -56,12 +55,18 @@ func (config *apiConfig) handlePolkaWebookEvent(w http.ResponseWriter, req *http
 	}
 	switch PolkaEvent.Event {
 	case "user.upgraded":
-		//TODO: upgrade user
 		UserUUID, uuidParseErr := uuid.Parse(PolkaEvent.Data.UserID)
-		Params := database.UpdateUserChirpyRedParams{IsChirpyRed: sql.NullBool{true}, ID: UserUUID}
-		_, err := config.dbQueries.UpdateUserChirpyRed(req.Context(), Params)
+		log.Printf("Attempting user.upgraded on UserId %s", PolkaEvent.Data.UserID)
+		if uuidParseErr != nil {
+			log.Printf("Could not parse UUID from event userid %s", PolkaEvent.Data.UserID)
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		Params := database.UpdateUserChirpyRedParams{IsChirpyRed: true, ID: UserUUID}
+		updated, err := config.dbQueries.UpdateUserChirpyRed(req.Context(), Params)
+		log.Printf("User %s upgraded: %t\n", updated.Email, updated.IsChirpyRed)
 		if err != nil {
 			log.Printf("UpdateUserChirpyRed failed. event body: %v", PolkaEvent)
+			w.WriteHeader(http.StatusNotFound)
 		}
 		w.WriteHeader(http.StatusNoContent)
 		return
@@ -269,7 +274,6 @@ func (config *apiConfig) refresh(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-	//TODO: With the user's ID, generate new access token
 	AuthToken, err := auth.MakeJWT(ExistingRefreshToken.UserID, config.secretToken, getTokenDuration(config.tokenDuration))
 	if err != nil {
 		log.Printf("refreshing with new jwt failed.\n")
@@ -315,7 +319,6 @@ func (config *apiConfig) userLogin(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(500)
 		return
 	}
-	//TODO: Handle scenario where user's email is not found
 	user, _ := config.dbQueries.GetUser(req.Context(), login.Email)
 	if good, _ := auth.CheckPasswordHash(login.Password, user.HashedPassword); !good {
 		log.Printf("Login failed for e-mail: %s\n", login.Email)
@@ -327,7 +330,6 @@ func (config *apiConfig) userLogin(w http.ResponseWriter, req *http.Request) {
 	RefreshToken, _ := auth.MakeRefreshToken()
 	RefreshDuration := getTokenDuration(config.refreshDuration)
 	RefreshExpiration := time.Now().Add(RefreshDuration)
-	//TODO: Add RefreshToken record to database
 	CreateRefreshTokenParams := database.CreateRefreshTokenParams{
 		Token:     RefreshToken,
 		UserID:    user.ID,
@@ -343,7 +345,7 @@ func (config *apiConfig) userLogin(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	dto := userDTO{
-		database.User{ID: user.ID, CreatedAt: user.CreatedAt, UpdatedAt: user.UpdatedAt, Email: user.Email},
+		database.User{ID: user.ID, CreatedAt: user.CreatedAt, UpdatedAt: user.UpdatedAt, Email: user.Email, IsChirpyRed: user.IsChirpyRed},
 		jwt,
 		DBRefreshToken.Token,
 	}

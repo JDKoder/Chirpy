@@ -59,7 +59,7 @@ func main() {
 	const API_REVOKE = API_PREFIX + "/revoke"
 	const API_CHIRPS = API_PREFIX + "/chirps"
 	const API_CHIRPS_BY_ID = API_CHIRPS + "/{chirpId}"
-	const API_POLKA_WEBOOKS = API_CHIRPS + "/polka/webhooks"
+	const API_POLKA_WEBOOKS = API_PREFIX + "/polka/webhooks"
 	fs := http.FileServer(http.Dir("."))
 	serverMux.Handle("/app/", cfg.incrementFileserverHits(http.StripPrefix("/app", fs)))
 	serverMux.HandleFunc("GET "+API_HEALTHZ, healthHandler)
