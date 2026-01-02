@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -33,6 +34,41 @@ type userDTO struct {
 	database.User
 	Token        string `json:"token"`
 	RefreshToken string `json:"refresh_token"`
+}
+
+type polkaEventData struct {
+	UserID string `json:"user_id"`
+}
+
+type polkaEvent struct {
+	Event string                 `json:"event"`
+	Data   polkaEventData `json:"data"`
+}
+
+func (config *apiConfig) handlePolkaWebookEvent(w http.ResponseWriter, req *http.Request) {
+	PolkaEvent := polkaEvent{}
+	decoder := json.NewDecoder(req.Body)
+	err := decoder.Decode(&PolkaEvent)
+	if err != nil {
+		log.Printf("Couldn't decode json body to polkaEvent: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+	switch PolkaEvent.Event {
+	case "user.upgraded":
+		//TODO: upgrade user
+		UserUUID, uuidParseErr := uuid.Parse(PolkaEvent.Data.UserID)
+		Params := database.UpdateUserChirpyRedParams{IsChirpyRed: sql.NullBool{true}, ID: UserUUID}
+		_, err := config.dbQueries.UpdateUserChirpyRed(req.Context(), Params)
+		if err != nil {
+			log.Printf("UpdateUserChirpyRed failed. event body: %v", PolkaEvent)
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	default:
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 }
 
 func (config *apiConfig) incrementFileserverHits(next http.Handler) http.Handler {
@@ -70,7 +106,7 @@ func (config *apiConfig) deleteChirpByID(w http.ResponseWriter, req *http.Reques
 	}
 	if chirp.UserID != userID {
 		log.Printf("Unauthorized deletion of another user's chirp\n")
-		w.WriteHeader(http.StatusUnauthorized)
+		w.WriteHeader(http.StatusForbidden)
 		return
 	}
 	err = config.dbQueries.DeleteChirp(req.Context(), chirpUUID)

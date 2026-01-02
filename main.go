@@ -59,6 +59,7 @@ func main() {
 	const API_REVOKE = API_PREFIX + "/revoke"
 	const API_CHIRPS = API_PREFIX + "/chirps"
 	const API_CHIRPS_BY_ID = API_CHIRPS + "/{chirpId}"
+	const API_POLKA_WEBOOKS = API_CHIRPS + "/polka/webhooks"
 	fs := http.FileServer(http.Dir("."))
 	serverMux.Handle("/app/", cfg.incrementFileserverHits(http.StripPrefix("/app", fs)))
 	serverMux.HandleFunc("GET "+API_HEALTHZ, healthHandler)
@@ -73,6 +74,7 @@ func main() {
 	serverMux.HandleFunc("DELETE "+API_CHIRPS_BY_ID, cfg.deleteChirpByID)
 	serverMux.HandleFunc("POST "+API_REFRESH, cfg.refresh)
 	serverMux.HandleFunc("POST "+API_REVOKE, cfg.revoke)
+	serverMux.HandleFunc("POST "+API_POLKA_WEBOOKS, cfg.handlePolkaWebookEvent)
 	s.ListenAndServe()
 }
 
