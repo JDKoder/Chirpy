@@ -38,6 +38,7 @@ func main() {
 	cfg.secretToken = os.Getenv("INTERNAL_SECRET")
 	cfg.tokenDuration = os.Getenv("DEFAULT_TOKEN_DURATION")
 	cfg.refreshDuration = os.Getenv("REFRESH_TOKEN_DURATION")
+	cfg.polkaApiKey = os.Getenv("POLKA_KEY")
 
 	s := &http.Server{
 		Addr:           ":8080",

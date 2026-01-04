@@ -51,16 +51,40 @@ func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
 	return userID, nil
 }
 
-func GetBearerToken(headers http.Header) (string, error) {
+func spliceAuthorizationHeader(headers http.Header) ([]string, error) {
 	authHeader := headers.Get("Authorization")
 	if authHeader == "" {
-		return "", fmt.Errorf("Authorization header not set\n")
+		return []string{}, fmt.Errorf("Authorization header not set\n")
 	}
 	authSplice := strings.Split(authHeader, " ")
 	if len(authSplice) < 2 {
-		return "", fmt.Errorf("Bad Authorization Header %s\n", authHeader)
+		return []string{}, fmt.Errorf("Bad Authorization Header %s\n", authHeader)
+	}
+	return authSplice, nil
+}
+
+func GetBearerToken(headers http.Header) (string, error) {
+	authSplice, err := spliceAuthorizationHeader(headers)
+	if err != nil {
+		return "", fmt.Errorf("Bad Authorization Header: %s", err)
+	}
+	if authSplice[0] != "Bearer" {
+		log.Printf("Authorization header is missing Bearer part")
+		return "", fmt.Errorf("Authorization is malformed")
 	}
 	return authSplice[1], nil
+}
+
+func GetAPIKey(headers http.Header) (string, error) {
+	AuthorizationValue, err := spliceAuthorizationHeader(headers)
+	if err != nil {
+		return "", fmt.Errorf("Bad Authorization Header: %s", err)
+	}
+	if AuthorizationValue[0] != "ApiKey" {
+		log.Printf("Authorization header is missing ApiKey part")
+		return "", fmt.Errorf("Authorization is malformed.")
+	}
+	return AuthorizationValue[1], nil
 }
 
 func MakeRefreshToken() (string, error) {

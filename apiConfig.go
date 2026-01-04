@@ -22,6 +22,7 @@ type apiConfig struct {
 	secretToken     string
 	tokenDuration   string
 	refreshDuration string
+	polkaApiKey     string
 }
 
 type emailBody struct {
@@ -45,6 +46,12 @@ type polkaEvent struct {
 }
 
 func (config *apiConfig) handlePolkaWebookEvent(w http.ResponseWriter, req *http.Request) {
+	APIKey, authErr := auth.GetAPIKey(req.Header)
+	if authErr != nil || APIKey != config.polkaApiKey {
+		log.Printf("Invalid ApiKey in Authorization Header: %s\n  Error: %s\n", APIKey, authErr)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
 	PolkaEvent := polkaEvent{}
 	decoder := json.NewDecoder(req.Body)
 	err := decoder.Decode(&PolkaEvent)
