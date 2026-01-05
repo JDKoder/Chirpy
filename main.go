@@ -70,7 +70,7 @@ func main() {
 	serverMux.HandleFunc(API_USERS, cfg.updateUser)
 	serverMux.HandleFunc("POST "+API_LOGIN, cfg.userLogin)
 	serverMux.HandleFunc("POST "+API_CHIRPS, cfg.chirp)
-	serverMux.HandleFunc("GET "+API_CHIRPS, cfg.getChirp)
+	serverMux.HandleFunc("GET "+API_CHIRPS, cfg.getChirpByAuthorID)
 	serverMux.HandleFunc("GET "+API_CHIRPS_BY_ID, cfg.getChirpById)
 	serverMux.HandleFunc("DELETE "+API_CHIRPS_BY_ID, cfg.deleteChirpByID)
 	serverMux.HandleFunc("POST "+API_REFRESH, cfg.refresh)

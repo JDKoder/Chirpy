@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -157,7 +158,43 @@ func (config *apiConfig) getChirpById(w http.ResponseWriter, req *http.Request) 
 	w.Write(dat)
 }
 
+func (config *apiConfig) getChirpByAuthorID(w http.ResponseWriter, req *http.Request) {
+	AuthorId := req.FormValue("author_id")
+	var qChirps []database.Chirp
+	var err error
+	if AuthorId == "" {
+		qChirps, err = config.dbQueries.GetChirps(req.Context())
+	} else {
+		AuthorUUID, _ := uuid.Parse(AuthorId)
+		qChirps, err = config.dbQueries.GetChirpsByUserID(req.Context(), AuthorUUID)
+	}
+	if err != nil {
+		log.Printf("GetChirps encountered error: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+	SortOrder := req.FormValue("sort")
+	log.Printf("Sort = %s", SortOrder)
+	if SortOrder == "desc" {
+		sort.Slice(qChirps,
+			func(i, j int) bool { return qChirps[i].CreatedAt.After(qChirps[j].CreatedAt) })
+	} else {
+		sort.Slice(qChirps,
+			func(i, j int) bool { return qChirps[i].CreatedAt.Before(qChirps[j].CreatedAt) })
+	}
+
+	dat, err := json.Marshal(qChirps)
+	if err != nil {
+		log.Printf("Couldn't marshal Chirps from object %v", qChirps)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write(dat)
+}
+
 func (config *apiConfig) getChirp(w http.ResponseWriter, req *http.Request) {
+
 	qChirps, err := config.dbQueries.GetChirps(req.Context())
 	if err != nil {
 		log.Printf("GetChirps encountered error: %s", err)
